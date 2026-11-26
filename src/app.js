@@ -15,13 +15,18 @@
   };
 
   // ───────────────────────── Audio ─────────────────────────
+  const VOL_BOOST = 4; // el 100% del control equivale a ganancia x4 (con limitador)
   function audio() {
     if (!S.ctx) S.ctx = new (window.AudioContext || window.webkitAudioContext)();
     if (S.ctx.state === 'suspended') S.ctx.resume();
     if (!S.bus) {
       S.bus = S.ctx.createGain();
-      S.bus.gain.value = Sound.volume;
-      S.bus.connect(S.ctx.destination);
+      S.bus.gain.value = Sound.volume * VOL_BOOST;
+      // Compresor/limitador: permite subir mucho el volumen sin que se distorsione.
+      const comp = S.ctx.createDynamicsCompressor();
+      comp.threshold.value = -14; comp.knee.value = 10; comp.ratio.value = 8;
+      comp.attack.value = 0.003; comp.release.value = 0.2;
+      S.bus.connect(comp); comp.connect(S.ctx.destination);
     }
     return S.ctx;
   }
@@ -31,7 +36,7 @@
     get(k, d) { try { const v = localStorage.getItem('pt.' + k); return v == null ? d : v; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem('pt.' + k, v); } catch (e) {} }
   };
-  const Sound = { synth: null, enabled: false, name: '', volume: +store.get('vol', 80) / 100, presets: [], preset: null };
+  const Sound = { synth: null, enabled: false, name: '', volume: +store.get('vol', 85) / 100, presets: [], preset: null };
 
   async function initSynth() {
     if (Sound.synth) return Sound.synth;
@@ -126,7 +131,7 @@
     const ctx = audio();
     const f = 440 * Math.pow(2, (midi - 69) / 12);
     const g = ctx.createGain();
-    const peak = 0.05 + 0.22 * ((vel || 90) / 127);
+    const peak = 0.04 + 0.15 * ((vel || 90) / 127);
     const hold = Math.max(dur, 0.15);
     g.gain.setValueAtTime(0.0001, when);
     g.gain.linearRampToValueAtTime(peak, when + 0.008);
@@ -912,7 +917,7 @@
     $('volume').addEventListener('input', (e) => {
       Sound.volume = e.target.value / 100; $('volLabel').textContent = e.target.value + '%';
       store.set('vol', e.target.value);
-      if (S.bus) S.bus.gain.value = Sound.volume;
+      if (S.bus) S.bus.gain.value = Sound.volume * VOL_BOOST;
     });
     $('preset').addEventListener('change', (e) => {
       const p = Sound.presets.find((x) => x.key === e.target.value); if (!p) return;
