@@ -1,0 +1,66 @@
+:root {
+  --bg: #14161c; --panel: #1c2029; --line: #2b3140; --txt: #e8ebf2; --muted: #8b93a7;
+  --accent: #3b82f6; --R: #3b82f6; --L: #f59e0b; --ok: #22c55e; --bad: #ef4444;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { display: flex; background: var(--bg); color: var(--txt); font: 14px/1.4 "Segoe UI", system-ui, sans-serif; }
+#side { width: 300px; flex: none; background: var(--panel); border-right: 1px solid var(--line); padding: 14px; overflow-y: auto; }
+h1 { font-size: 19px; margin: 0 0 10px; }
+h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; display: flex; justify-content: space-between; }
+h2 b { color: var(--txt); }
+section { padding: 12px 0; border-top: 1px solid var(--line); }
+.small { font-size: 12px; } .muted { color: var(--muted); }
+.btn { display: block; width: 100%; text-align: center; padding: 9px 12px; margin: 0 0 8px; background: #262c3a; color: var(--txt); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; font: inherit; }
+.btn:hover { background: #2e3546; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: #2f6fe0; }
+.btn.big { font-size: 16px; padding: 12px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.seg { display: flex; gap: 4px; margin-bottom: 8px; }
+.seg button { flex: 1; padding: 8px 4px; background: #262c3a; color: var(--txt); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; font: inherit; }
+.seg button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.seg button .small { opacity: .8; }
+.row { display: block; margin: 8px 0; }
+.row select, .row input[type=range] { display: block; width: 100%; margin-top: 4px; }
+select, input[type=number] { background: #262c3a; color: var(--txt); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font: inherit; }
+.row2 { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.row2 input { width: 64px; }
+.chk { display: flex; gap: 8px; align-items: center; margin: 6px 0; cursor: pointer; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+#songInfo { margin-top: 6px; }
+
+main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#bar { display: flex; gap: 14px; align-items: center; padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.pill { padding: 3px 10px; border-radius: 999px; background: #262c3a; font-size: 12px; white-space: nowrap; }
+.pill.ok { background: #14532d; color: #bbf7d0; }
+#feedback { flex: 1; font-size: 15px; font-weight: 600; }
+#feedback.good { color: var(--ok); } #feedback.bad { color: var(--bad); }
+#scoreWrap { flex: 1; position: relative; overflow: auto; background: #f7f5ef; }
+#score { padding: 6px 4px; }
+#score svg { display: block; }
+#overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 120px; font-weight: 800; color: rgba(37,99,235,.55); pointer-events: none; }
+#overlay[hidden] { display: none; }
+
+/* colores de las notas en la partitura */
+.s-cur path, .s-cur rect, .s-cur text { fill: #2563eb !important; }
+.s-cur [stroke]:not([stroke=none]) { stroke: #2563eb !important; }
+.s-ok path, .s-ok rect, .s-ok text { fill: #16a34a !important; }
+.s-ok [stroke]:not([stroke=none]) { stroke: #16a34a !important; }
+.s-bad path, .s-bad rect, .s-bad text { fill: #ea580c !important; }
+.s-bad [stroke]:not([stroke=none]) { stroke: #ea580c !important; }
+.s-miss path, .s-miss rect, .s-miss text { fill: #dc2626 !important; }
+.s-miss [stroke]:not([stroke=none]) { stroke: #dc2626 !important; }
+.dim { opacity: .3; }
+
+/* teclado */
+#kbWrap { background: #0e1015; padding: 8px 10px 6px; border-top: 1px solid var(--line); }
+#kb { position: relative; height: 130px; user-select: none; }
+.key { position: absolute; top: 0; border: 1px solid #222; border-radius: 0 0 5px 5px; cursor: pointer; }
+.key.w { background: #fafafa; height: 130px; z-index: 1; color: #555; font-size: 10px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 4px; }
+.key.b { background: #1b1b1f; height: 80px; z-index: 2; }
+.key.wantR.w { background: #93c5fd; } .key.wantR.b { background: #2563eb; }
+.key.wantL.w { background: #fcd34d; } .key.wantL.b { background: #d97706; }
+.key.down.w { background: #86efac; } .key.down.b { background: #16a34a; }
+.key.wrong.w, .key.wrong.b { background: #ef4444; }
+#kbHint { margin-top: 6px; }

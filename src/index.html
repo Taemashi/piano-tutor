@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Piano Tutor</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside id="side">
+    <h1>🎹 Piano Tutor</h1>
+
+    <section>
+      <h2>Canción</h2>
+      <label class="btn primary" for="file">Abrir archivo MIDI…</label>
+      <input id="file" type="file" accept=".mid,.midi" hidden>
+      <button id="demo" class="btn">Canción de ejemplo</button>
+      <div id="songInfo" class="small muted">Ninguna canción cargada.</div>
+    </section>
+
+    <section>
+      <h2>Mano a practicar</h2>
+      <div class="seg" id="hands">
+        <button data-v="both" class="on">Ambas</button>
+        <button data-v="R">Melodía<br><span class="small">derecha</span></button>
+        <button data-v="L">Bajo<br><span class="small">izquierda</span></button>
+      </div>
+      <label class="row">Dividir por
+        <select id="splitMode">
+          <option value="pitch">Altura de la nota</option>
+          <option value="tracks">Pistas del archivo</option>
+        </select>
+      </label>
+      <label class="row" id="splitRow">Corte: <b id="splitLabel">Do4 (60)</b>
+        <input id="splitPoint" type="range" min="36" max="84" value="60">
+      </label>
+      <div class="small muted">Notas desde el corte hacia arriba = derecha. Hacia abajo = izquierda.</div>
+    </section>
+
+    <section>
+      <h2>Modo</h2>
+      <div class="seg" id="modes">
+        <button data-v="wait" class="on" title="Avanza solo cuando tocas la nota correcta">Espera</button>
+        <button data-v="rhythm" title="Sigue el tempo; se evalúa nota y ritmo">Ritmo</button>
+        <button data-v="listen" title="Escucha la canción con el cursor">Escuchar</button>
+      </div>
+      <div class="small muted" id="modeHelp"></div>
+    </section>
+
+    <section>
+      <h2>Velocidad <b id="speedLabel">100%</b></h2>
+      <input id="speed" type="range" min="25" max="125" step="5" value="100">
+      <div class="small muted">Aplica a los modos Ritmo y Escuchar.</div>
+    </section>
+
+    <section>
+      <h2>Compases</h2>
+      <div class="row2">
+        Desde <input id="loopA" type="number" min="1" value="1">
+        hasta <input id="loopB" type="number" min="1" value="1">
+      </div>
+      <label class="chk"><input id="loop" type="checkbox"> Repetir en bucle</label>
+      <label class="chk"><input id="autoSpeed" type="checkbox"> Subir velocidad sola (≥90% de acierto)</label>
+    </section>
+
+    <section>
+      <h2>Opciones</h2>
+      <label class="chk"><input id="metro" type="checkbox" checked> Metrónomo</label>
+      <label class="chk"><input id="backing" type="checkbox" checked> Sonar la otra mano (Ritmo)</label>
+      <label class="chk"><input id="thru" type="checkbox"> Sonido del programa al tocar</label>
+      <label class="chk"><input id="names" type="checkbox" checked> Nombres de notas en el teclado</label>
+    </section>
+
+    <section class="actions">
+      <button id="start" class="btn primary big" disabled>▶ Iniciar</button>
+      <button id="reset" class="btn" disabled>Reiniciar</button>
+    </section>
+  </aside>
+
+  <main>
+    <div id="bar">
+      <span id="midiStatus" class="pill">Buscando piano…</span>
+      <span id="feedback">Abre un archivo MIDI o prueba la canción de ejemplo.</span>
+      <span id="stats" class="muted"></span>
+    </div>
+    <div id="scoreWrap">
+      <div id="score"></div>
+      <div id="overlay" hidden></div>
+    </div>
+    <div id="kbWrap">
+      <div id="kb"></div>
+      <div class="small muted" id="kbHint">Sin piano: usa el teclado del PC (Z S X D C V G B H N J M = Do3…Si3, Q 2 W 3 E R 5 T 6 Y 7 U = Do4…Si4) o haz clic en las teclas.</div>
+    </div>
+  </main>
+
+  <script src="vendor/vexflow.js"></script>
+  <script src="midi.js"></script>
+  <script src="notation.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

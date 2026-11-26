@@ -1,0 +1,58 @@
+{
+  "name": "piano-tutor",
+  "productName": "Piano Tutor",
+  "version": "0.1.0",
+  "description": "Aprende a tocar canciones de piano nota por nota con tu piano MIDI",
+  "main": "main.js",
+  "author": "Taemashi",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Taemashi/piano-tutor.git"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never",
+    "release": "powershell -ExecutionPolicy Bypass -File release.ps1"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "vexflow": "^4.2.5"
+  },
+  "build": {
+    "appId": "com.taemashi.pianotutor",
+    "productName": "Piano Tutor",
+    "files": [
+      "main.js",
+      "src/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "artifactName": "PianoTutor-Setup-${version}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Taemashi",
+        "repo": "piano-tutor",
+        "releaseType": "release"
+      }
+    ]
+  }
+}
