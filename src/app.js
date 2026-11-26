@@ -49,8 +49,8 @@
   }
   function syncSoundUi() {
     $('sfState').textContent = Sound.enabled ? 'SoundFont' : 'Básico';
-    $('sfName').textContent = Sound.enabled ? Sound.name : 'Sintetizador básico integrado.';
-    $('sfClear').hidden = !Sound.enabled;
+    $('sfName').textContent = Sound.enabled ? 'Archivo: ' + Sound.name : '';
+    const rm = $('sfRemove'); if (rm) rm.disabled = !Sound.enabled;
   }
   async function useSoundfont(bytes, name) {
     setFeedback('Cargando SoundFont…');
@@ -632,24 +632,53 @@
       if (S.bus) S.bus.gain.value = Sound.volume;
     });
     $('program').addEventListener('change', (e) => { Sound.program = +e.target.value; store.set('prog', e.target.value); applyProgram(); });
-    $('sfChoose').addEventListener('click', async () => {
-      if (window.pianoApi) {
-        const r = await window.pianoApi.chooseSoundfont();
+    const sel = $('sfSelect');
+    const api = window.pianoApi;
+    async function refreshSfList() {
+      if (!api) return;
+      const { list, current } = await api.listSoundfonts();
+      sel.innerHTML = '<option value="">Sonido básico integrado</option>';
+      for (const it of list) {
+        const o = document.createElement('option');
+        o.value = it.path; o.textContent = it.name + (it.missing ? ' (no encontrado)' : '');
+        sel.appendChild(o);
+      }
+      sel.value = Sound.enabled ? current : '';
+      $('sfRemove').disabled = !sel.value;
+    }
+    async function pickSoundfont(p) {
+      if (!p) {
+        if (Sound.synth) Sound.synth.stopAll(true);
+        Sound.enabled = false; syncSoundUi();
+        if (api) await api.clearSoundfont();
+        setFeedback('Usando el sonido básico.');
+      } else {
+        const r = await api.selectSoundfont(p);
         if (r) await useSoundfont(toBuffer(r.data), r.name);
-      } else $('sfFile').click();
+        else setFeedback('No encuentro ese archivo de SoundFont.', 'bad');
+      }
+      await refreshSfList();
+    }
+    sel.addEventListener('change', () => pickSoundfont(sel.value));
+    $('sfAdd').addEventListener('click', async () => {
+      if (!api) { $('sfFile').click(); return; }
+      const r = await api.addSoundfonts();
+      if (r) await pickSoundfont(r.first);
+    });
+    $('sfRemove').addEventListener('click', async () => {
+      if (!sel.value) return;
+      const wasActive = Sound.enabled;
+      await api.removeSoundfont(sel.value);
+      if (wasActive) { if (Sound.synth) Sound.synth.stopAll(true); Sound.enabled = false; syncSoundUi(); }
+      await refreshSfList();
     });
     $('sfFile').addEventListener('change', async (e) => {
       const f = e.target.files[0]; if (!f) return;
       await useSoundfont(await f.arrayBuffer(), f.name); e.target.value = '';
     });
-    $('sfClear').addEventListener('click', async () => {
-      if (Sound.synth) Sound.synth.stopAll(true);
-      Sound.enabled = false; syncSoundUi();
-      if (window.pianoApi) await window.pianoApi.clearSoundfont();
-      setFeedback('Usando el sonido básico.');
-    });
-    if (window.pianoApi) {
-      window.pianoApi.savedSoundfont().then((r) => { if (r) useSoundfont(toBuffer(r.data), r.name); }).catch(() => {});
+    if (api) {
+      api.savedSoundfont().then(async (r) => { if (r) await useSoundfont(toBuffer(r.data), r.name); refreshSfList(); }).catch(() => {});
+      refreshSfList();
     }
 
     buildKeyboard();

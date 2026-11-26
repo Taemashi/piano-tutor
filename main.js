@@ -67,16 +67,41 @@ app.whenReady().then(() => {
   ses.setPermissionRequestHandler((wc, permission, cb) => cb(allowed.includes(permission)));
   ses.setPermissionCheckHandler((wc, permission) => allowed.includes(permission));
 
-  ipcMain.handle('sf:choose', async () => {
+  // Biblioteca de SoundFonts: lista de rutas + la que está activa.
+  const getLib = () => {
+    const c = readCfg();
+    let lib = Array.isArray(c.library) ? c.library : [];
+    if (c.soundfont && !lib.includes(c.soundfont)) lib = [...lib, c.soundfont];
+    return { c, lib };
+  };
+  ipcMain.handle('sf:list', () => {
+    const { c, lib } = getLib();
+    return {
+      current: c.soundfont || '',
+      list: lib.map((p) => ({ path: p, name: path.basename(p).replace(/.(sf2|sf3|sfogg|dls)$/i, ''), missing: !fs.existsSync(p) }))
+    };
+  });
+  ipcMain.handle('sf:add', async () => {
     const r = await dialog.showOpenDialog(win, {
-      title: 'Elegir SoundFont',
+      title: 'Añadir SoundFonts',
       filters: [{ name: 'SoundFont', extensions: ['sf2', 'sf3', 'sfogg', 'dls'] }],
-      properties: ['openFile']
+      properties: ['openFile', 'multiSelections']
     });
-    if (r.canceled || !r.filePaths[0]) return null;
-    const sf = await loadSoundfont(r.filePaths[0]);
-    writeCfg({ ...readCfg(), soundfont: sf.path });
+    if (r.canceled || !r.filePaths.length) return null;
+    const { c, lib } = getLib();
+    writeCfg({ ...c, library: [...new Set([...lib, ...r.filePaths])] });
+    return { first: r.filePaths[0] };
+  });
+  ipcMain.handle('sf:select', async (e, p) => {
+    const { c, lib } = getLib();
+    if (!lib.includes(p) || !fs.existsSync(p)) return null;
+    const sf = await loadSoundfont(p);
+    writeCfg({ ...c, library: lib, soundfont: p });
     return sf;
+  });
+  ipcMain.handle('sf:remove', (e, p) => {
+    const { c, lib } = getLib();
+    writeCfg({ ...c, library: lib.filter((x) => x !== p), soundfont: c.soundfont === p ? null : c.soundfont });
   });
   ipcMain.handle('sf:saved', async () => {
     const p = readCfg().soundfont;

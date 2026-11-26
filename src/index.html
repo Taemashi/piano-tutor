@@ -65,9 +65,14 @@
 
     <section>
       <h2>Sonido <b id="sfState">Básico</b></h2>
-      <div id="sfName" class="small muted">Sintetizador básico integrado.</div>
-      <button id="sfChoose" class="btn" style="margin-top:8px">Cambiar SoundFont (.sf2 / .sf3)…</button>
-      <button id="sfClear" class="btn" hidden>Volver al sonido básico</button>
+      <label class="row">SoundFont activo
+        <select id="sfSelect"><option value="">Sonido básico integrado</option></select>
+      </label>
+      <div id="sfName" class="small muted"></div>
+      <div class="two">
+        <button id="sfAdd" class="btn">+ Añadir SoundFont…</button>
+        <button id="sfRemove" class="btn" disabled>Quitar de la lista</button>
+      </div>
       <input id="sfFile" type="file" accept=".sf2,.sf3,.sfogg,.dls" hidden>
       <label class="row">Instrumento
         <select id="program">
