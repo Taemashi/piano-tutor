@@ -64,6 +64,32 @@
     </section>
 
     <section>
+      <h2>Sonido <b id="sfState">Básico</b></h2>
+      <div id="sfName" class="small muted">Sintetizador básico integrado.</div>
+      <button id="sfChoose" class="btn" style="margin-top:8px">Cambiar SoundFont (.sf2 / .sf3)…</button>
+      <button id="sfClear" class="btn" hidden>Volver al sonido básico</button>
+      <input id="sfFile" type="file" accept=".sf2,.sf3,.sfogg,.dls" hidden>
+      <label class="row">Instrumento
+        <select id="program">
+          <option value="0">Piano de cola</option>
+          <option value="1">Piano brillante</option>
+          <option value="4">Piano eléctrico</option>
+          <option value="11">Vibráfono</option>
+          <option value="16">Órgano</option>
+          <option value="19">Órgano de iglesia</option>
+          <option value="24">Guitarra de nylon</option>
+          <option value="40">Violín</option>
+          <option value="48">Cuerdas</option>
+          <option value="73">Flauta</option>
+        </select>
+      </label>
+      <label class="row">Volumen <b id="volLabel">80%</b>
+        <input id="volume" type="range" min="0" max="100" value="80">
+      </label>
+      <div class="small muted">El instrumento aplica a SoundFonts GM completos. Un SoundFont de un solo piano suena igual.</div>
+    </section>
+
+    <section>
       <h2>Opciones</h2>
       <label class="chk"><input id="metro" type="checkbox" checked> Metrónomo</label>
       <label class="chk"><input id="backing" type="checkbox" checked> Sonar la otra mano (Ritmo)</label>
@@ -94,6 +120,7 @@
   </main>
 
   <script src="vendor/vexflow.js"></script>
+  <script src="vendor/spessa.js"></script>
   <script src="midi.js"></script>
   <script src="notation.js"></script>
   <script src="app.js"></script>

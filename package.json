@@ -13,7 +13,8 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --win --publish never",
-    "release": "powershell -ExecutionPolicy Bypass -File release.ps1"
+    "release": "powershell -ExecutionPolicy Bypass -File release.ps1",
+    "vendor": "node tools/build-vendor.mjs"
   },
   "dependencies": {
     "electron-updater": "^6.3.9"
@@ -21,13 +22,16 @@
   "devDependencies": {
     "electron": "^33.0.0",
     "electron-builder": "^25.1.8",
-    "vexflow": "^4.2.5"
+    "esbuild": "^0.28.2",
+    "vexflow": "^4.2.5",
+    "spessasynth_lib": "^4.4.10"
   },
   "build": {
     "appId": "com.taemashi.pianotutor",
     "productName": "Piano Tutor",
     "files": [
       "main.js",
+      "preload.js",
       "src/**/*",
       "package.json"
     ],

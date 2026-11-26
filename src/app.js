@@ -10,7 +10,7 @@
     loopA: 1, loopB: 1, measures: 0,
     steps: [], idx: 0, status: 'idle', noteEls: new Map(), measureEl: [], rowH: 250,
     stats: { ok: 0, bad: 0, errs: 0, total: 0 },
-    keyEls: {}, kbLo: 36, kbHi: 96, held: new Set(), passes: 0,
+    thruOn: new Set(), keyEls: {}, kbLo: 36, kbHi: 96, held: new Set(), passes: 0,
     ctx: null, master: null, raf: 0, t0: 0, spb: 0.5, endTime: 0, timeOf: null, tol: 0.2, lastCur: null
   };
 
@@ -18,7 +18,63 @@
   function audio() {
     if (!S.ctx) S.ctx = new (window.AudioContext || window.webkitAudioContext)();
     if (S.ctx.state === 'suspended') S.ctx.resume();
+    if (!S.bus) {
+      S.bus = S.ctx.createGain();
+      S.bus.gain.value = Sound.volume;
+      S.bus.connect(S.ctx.destination);
+    }
     return S.ctx;
+  }
+
+  // ───────────────────────── SoundFont ─────────────────────────
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('pt.' + k); return v == null ? d : v; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('pt.' + k, v); } catch (e) {} }
+  };
+  const Sound = { synth: null, enabled: false, name: '', volume: +store.get('vol', 80) / 100, program: +store.get('prog', 0) };
+
+  async function initSynth() {
+    if (Sound.synth) return Sound.synth;
+    const ctx = audio();
+    await ctx.audioWorklet.addModule('vendor/spessasynth_processor.min.js');
+    const synth = new SpessaLib.WorkletSynthesizer(ctx);
+    synth.connect(S.bus);
+    Sound.synth = synth;
+    return synth;
+  }
+  function applyProgram() {
+    if (!Sound.synth) return;
+    Sound.synth.programChange(0, Sound.program);
+    Sound.synth.programChange(1, Sound.program);
+  }
+  function syncSoundUi() {
+    $('sfState').textContent = Sound.enabled ? 'SoundFont' : 'Básico';
+    $('sfName').textContent = Sound.enabled ? Sound.name : 'Sintetizador básico integrado.';
+    $('sfClear').hidden = !Sound.enabled;
+  }
+  async function useSoundfont(bytes, name) {
+    setFeedback('Cargando SoundFont…');
+    try {
+      const synth = await initSynth();
+      synth.stopAll(true);
+      await synth.soundBankManager.addSoundBank(bytes, 'main');
+      await synth.isReady;
+      Sound.enabled = true; Sound.name = name;
+      applyProgram(); syncSoundUi();
+      setFeedback('SoundFont cargado: ' + name, 'good');
+    } catch (err) {
+      Sound.enabled = false; syncSoundUi();
+      setFeedback('No pude cargar ese SoundFont: ' + (err && err.message ? err.message : err), 'bad');
+    }
+  }
+  function toBuffer(u8) { return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength); }
+
+  // Reproduce una nota (SoundFont si hay uno cargado, si no el sintetizador básico).
+  function playNote(midi, when, dur, vel, dest) {
+    if (Sound.enabled) {
+      Sound.synth.noteOn(0, midi, vel || 90, { time: when });
+      Sound.synth.noteOff(0, midi, { time: when + Math.max(dur, 0.08) });
+    } else tone(dest || S.bus, midi, when, dur, vel);
   }
   function tone(dest, midi, when, dur, vel) {
     const ctx = audio();
@@ -238,6 +294,8 @@
 
   function stopAll(keepMsg) {
     cancelAnimationFrame(S.raf);
+    clearInterval(S.schedTimer);
+    if (Sound.enabled) Sound.synth.stopAll(true);
     if (S.master) {
       try { S.master.gain.cancelScheduledValues(0); S.master.gain.value = 0; S.master.disconnect(); } catch (e) {}
       S.master = null;
@@ -266,7 +324,7 @@
     S.t0 = ctx.currentTime + 0.2 + countIn * spb;
     S.timeOf = (beat) => S.t0 + (beat - startBeat) * spb;
     S.endTime = S.timeOf(endBeat);
-    S.master = ctx.createGain(); S.master.connect(ctx.destination);
+    S.master = ctx.createGain(); S.master.connect(S.bus);
 
     // Metrónomo y cuenta previa
     const useMetro = $('metro').checked;
@@ -275,12 +333,21 @@
         if (b < 0 || useMetro) click(S.master, S.t0 + b * spb, ((b % bm) + bm) % bm === 0);
       }
     }
-    // Notas que suenan solas
-    for (const n of S.notes) {
-      if (n.q < startBeat || n.q >= endBeat) continue;
-      const playIt = S.mode === 'listen' || ($('backing').checked && !handActive(n.hand));
-      if (playIt) tone(S.master, n.pitch, S.timeOf(n.q), n.qd * spb * 0.95, n.vel);
-    }
+    // Notas que suenan solas (se programan poco a poco para poder detenerlas al instante)
+    S.sched = S.notes
+      .filter((n) => n.q >= startBeat && n.q < endBeat &&
+        (S.mode === 'listen' || ($('backing').checked && !handActive(n.hand))))
+      .sort((a, b) => a.q - b.q);
+    S.schedI = 0;
+    clearInterval(S.schedTimer);
+    const pump = () => {
+      const now = audio().currentTime;
+      while (S.schedI < S.sched.length && S.timeOf(S.sched[S.schedI].q) < now + 0.12) {
+        const n = S.sched[S.schedI++];
+        playNote(n.pitch, Math.max(S.timeOf(n.q), now), n.qd * spb * 0.95, n.vel, S.master);
+      }
+    };
+    S.schedTimer = setInterval(pump, 25); pump();
     for (const s of S.steps) { s.time = S.timeOf(s.beat); s.state = 'idle'; s.got.clear(); }
     S.lastCur = null;
     setFeedback(S.mode === 'rhythm' ? 'Sigue el tempo: toca cada nota a tiempo.' : 'Escuchando…');
@@ -352,13 +419,18 @@
     S.held.add(pitch);
     const el = S.keyEls[pitch];
     if (el) el.classList.add('down');
-    if ($('thru').checked) tone(audio().destination, pitch, audio().currentTime, 0.6, vel);
+    if ($('thru').checked) {
+      S.thruOn.add(pitch);
+      if (Sound.enabled) Sound.synth.noteOn(1, pitch, vel || 90);
+      else tone(audio() && S.bus, pitch, audio().currentTime, 0.6, vel);
+    }
 
     if (S.status === 'wait') waitInput(pitch);
     else if (S.status === 'rhythm') rhythmInput(pitch, audioTime == null ? audio().currentTime : audioTime);
   }
   function noteOff(pitch) {
     S.held.delete(pitch);
+    if (S.thruOn.delete(pitch) && Sound.enabled) Sound.synth.noteOff(1, pitch);
     const el = S.keyEls[pitch];
     if (el) el.classList.remove('down');
   }
@@ -548,6 +620,36 @@
       e.target.value = '';
     });
     window.addEventListener('resize', () => { buildKeyboard(); });
+
+    // Sonido / SoundFont
+    $('volume').value = Math.round(Sound.volume * 100); $('volLabel').textContent = $('volume').value + '%';
+    $('program').value = String(Sound.program);
+    $('volume').addEventListener('input', (e) => {
+      Sound.volume = e.target.value / 100; $('volLabel').textContent = e.target.value + '%';
+      store.set('vol', e.target.value);
+      if (S.bus) S.bus.gain.value = Sound.volume;
+    });
+    $('program').addEventListener('change', (e) => { Sound.program = +e.target.value; store.set('prog', e.target.value); applyProgram(); });
+    $('sfChoose').addEventListener('click', async () => {
+      if (window.pianoApi) {
+        const r = await window.pianoApi.chooseSoundfont();
+        if (r) await useSoundfont(toBuffer(r.data), r.name);
+      } else $('sfFile').click();
+    });
+    $('sfFile').addEventListener('change', async (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      await useSoundfont(await f.arrayBuffer(), f.name); e.target.value = '';
+    });
+    $('sfClear').addEventListener('click', async () => {
+      if (Sound.synth) Sound.synth.stopAll(true);
+      Sound.enabled = false; syncSoundUi();
+      if (window.pianoApi) await window.pianoApi.clearSoundfont();
+      setFeedback('Usando el sonido básico.');
+    });
+    if (window.pianoApi) {
+      window.pianoApi.savedSoundfont().then((r) => { if (r) useSoundfont(toBuffer(r.data), r.name); }).catch(() => {});
+    }
+
     buildKeyboard();
     initMidi();
   }
