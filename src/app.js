@@ -31,7 +31,7 @@
     get(k, d) { try { const v = localStorage.getItem('pt.' + k); return v == null ? d : v; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem('pt.' + k, v); } catch (e) {} }
   };
-  const Sound = { synth: null, enabled: false, name: '', volume: +store.get('vol', 80) / 100, program: +store.get('prog', 0) };
+  const Sound = { synth: null, enabled: false, name: '', volume: +store.get('vol', 80) / 100, presets: [], preset: null };
 
   async function initSynth() {
     if (Sound.synth) return Sound.synth;
@@ -39,31 +39,77 @@
     await ctx.audioWorklet.addModule('vendor/spessasynth_processor.min.js');
     const synth = new SpessaLib.WorkletSynthesizer(ctx);
     synth.connect(S.bus);
+    synth.eventHandler.addEvent('presetListChange', 'ui', (d) => { if (Sound.enabled || Sound.loading) setPresets(Array.isArray(d) ? d : synth.presetList); });
     Sound.synth = synth;
     return synth;
   }
   function applyProgram() {
-    if (!Sound.synth) return;
-    Sound.synth.programChange(0, Sound.program);
-    Sound.synth.programChange(1, Sound.program);
+    const syn = Sound.synth, p = Sound.preset;
+    if (!syn || !p) return;
+    for (const ch of [0, 1]) {
+      syn.controllerChange(ch, 0, p.msb);
+      syn.controllerChange(ch, 32, p.lsb);
+      syn.programChange(ch, p.program);
+    }
+  }
+  const presetKey = () => 'preset:' + Sound.name;
+  function setPresets(list) {
+    const seen = new Set();
+    Sound.presets = (list || [])
+      .filter((p) => !p.isDrum)
+      .map((p) => ({ key: p.bankMSB + ':' + p.bankLSB + ':' + p.program, name: p.name, msb: p.bankMSB, lsb: p.bankLSB, program: p.program }))
+      .filter((p) => !seen.has(p.key) && seen.add(p.key))
+      .sort((a, b) => a.msb - b.msb || a.lsb - b.lsb || a.program - b.program);
+    const saved = store.get(presetKey(), '');
+    Sound.preset = Sound.presets.find((p) => p.key === saved) || Sound.presets.find((p) => p.msb === 0 && p.lsb === 0) || Sound.presets[0] || null;
+    applyProgram(); renderPresets();
+  }
+  function renderPresets() {
+    const box = $('presetBox');
+    box.hidden = !Sound.enabled || !Sound.presets.length;
+    $('presetHelp').textContent = Sound.enabled
+      ? (Sound.presets.length ? 'Haz clic en un sonido para usarlo.' : 'Este SoundFont no trae sonidos melódicos.')
+      : 'Carga un SoundFont para ver y elegir sus sonidos.';
+    if (box.hidden) return;
+    const q = $('presetFilter').value.trim().toLowerCase();
+    const multiBank = new Set(Sound.presets.map((p) => p.msb + ':' + p.lsb)).size > 1;
+    const shown = Sound.presets.filter((p) => !q || p.name.toLowerCase().includes(q));
+    $('presetCount').textContent = '(' + shown.length + (q ? ' de ' + Sound.presets.length : '') + ')';
+    const sel = $('preset'); sel.innerHTML = '';
+    for (const p of shown) {
+      const o = document.createElement('option');
+      o.value = p.key;
+      o.textContent = (multiBank ? p.msb + '.' + p.lsb + '  ' : '') + String(p.program).padStart(3, '0') + '  ' + p.name;
+      if (Sound.preset && p.key === Sound.preset.key) o.selected = true;
+      sel.appendChild(o);
+    }
+    const cur = sel.querySelector('option:checked'); if (cur) cur.scrollIntoView({ block: 'nearest' });
+  }
+  // Suena una nota corta para oír el sonido recién elegido.
+  function preview() {
+    if (!Sound.enabled) return;
+    const t = audio().currentTime;
+    for (const [i, n] of [60, 64, 67].entries()) playNote(n, t + i * 0.13, 0.5, 90);
   }
   function syncSoundUi() {
     $('sfState').textContent = Sound.enabled ? 'SoundFont' : 'Básico';
     $('sfName').textContent = Sound.enabled ? 'Archivo: ' + Sound.name : '';
     const rm = $('sfRemove'); if (rm) rm.disabled = !Sound.enabled;
+    renderPresets();
   }
   async function useSoundfont(bytes, name) {
     setFeedback('Cargando SoundFont…');
     try {
       const synth = await initSynth();
       synth.stopAll(true);
+      Sound.loading = true; Sound.name = name;
       await synth.soundBankManager.addSoundBank(bytes, 'main');
       await synth.isReady;
-      Sound.enabled = true; Sound.name = name;
-      applyProgram(); syncSoundUi();
+      Sound.loading = false; Sound.enabled = true;
+      setPresets(synth.presetList); syncSoundUi();
       setFeedback('SoundFont cargado: ' + name, 'good');
     } catch (err) {
-      Sound.enabled = false; syncSoundUi();
+      Sound.loading = false; Sound.enabled = false; syncSoundUi();
       setFeedback('No pude cargar ese SoundFont: ' + (err && err.message ? err.message : err), 'bad');
     }
   }
@@ -625,13 +671,16 @@
 
     // Sonido / SoundFont
     $('volume').value = Math.round(Sound.volume * 100); $('volLabel').textContent = $('volume').value + '%';
-    $('program').value = String(Sound.program);
     $('volume').addEventListener('input', (e) => {
       Sound.volume = e.target.value / 100; $('volLabel').textContent = e.target.value + '%';
       store.set('vol', e.target.value);
       if (S.bus) S.bus.gain.value = Sound.volume;
     });
-    $('program').addEventListener('change', (e) => { Sound.program = +e.target.value; store.set('prog', e.target.value); applyProgram(); });
+    $('preset').addEventListener('change', (e) => {
+      const p = Sound.presets.find((x) => x.key === e.target.value); if (!p) return;
+      Sound.preset = p; store.set(presetKey(), p.key); applyProgram(); preview();
+    });
+    $('presetFilter').addEventListener('input', renderPresets);
     const sel = $('sfSelect');
     const api = window.pianoApi;
     async function refreshSfList() {

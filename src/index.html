@@ -74,24 +74,16 @@
         <button id="sfRemove" class="btn" disabled>Quitar de la lista</button>
       </div>
       <input id="sfFile" type="file" accept=".sf2,.sf3,.sfogg,.dls" hidden>
-      <label class="row">Instrumento
-        <select id="program">
-          <option value="0">Piano de cola</option>
-          <option value="1">Piano brillante</option>
-          <option value="4">Piano eléctrico</option>
-          <option value="11">Vibráfono</option>
-          <option value="16">Órgano</option>
-          <option value="19">Órgano de iglesia</option>
-          <option value="24">Guitarra de nylon</option>
-          <option value="40">Violín</option>
-          <option value="48">Cuerdas</option>
-          <option value="73">Flauta</option>
-        </select>
-      </label>
+      <div id="presetBox" hidden>
+        <label class="row">Sonidos del SoundFont <b id="presetCount"></b>
+          <input id="presetFilter" type="search" class="txt" placeholder="Buscar (piano, violín…)">
+          <select id="preset" size="8"></select>
+        </label>
+      </div>
       <label class="row">Volumen <b id="volLabel">80%</b>
         <input id="volume" type="range" min="0" max="100" value="80">
       </label>
-      <div class="small muted">El instrumento aplica a SoundFonts GM completos. Un SoundFont de un solo piano suena igual.</div>
+      <div class="small muted" id="presetHelp">Carga un SoundFont para ver y elegir sus sonidos.</div>
     </section>
 
     <section>

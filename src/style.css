@@ -23,6 +23,9 @@ section { padding: 12px 0; border-top: 1px solid var(--line); }
 .seg button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .seg button .small { opacity: .8; }
 .two { display: flex; gap: 6px; margin-top: 8px; } .two .btn { margin: 0; padding: 7px 6px; font-size: 12px; }
+.txt { width: 100%; margin: 4px 0; background: #262c3a; color: var(--txt); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font: inherit; }
+#preset { height: 170px; padding: 2px; }
+#preset option { padding: 3px 6px; border-radius: 4px; }
 .row { display: block; margin: 8px 0; }
 .row select, .row input[type=range] { display: block; width: 100%; margin-top: 4px; }
 select, input[type=number] { background: #262c3a; color: var(--txt); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font: inherit; }
