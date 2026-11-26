@@ -7,6 +7,7 @@ html, body { height: 100%; margin: 0; }
 body { display: flex; background: var(--bg); color: var(--txt); font: 14px/1.4 "Segoe UI", system-ui, sans-serif; }
 #side { width: 300px; flex: none; background: var(--panel); border-right: 1px solid var(--line); padding: 14px; overflow-y: auto; }
 h1 { font-size: 19px; margin: 0 0 10px; }
+.ver { font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 4px; }
 h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; display: flex; justify-content: space-between; }
 h2 b { color: var(--txt); }
 section { padding: 12px 0; border-top: 1px solid var(--line); }

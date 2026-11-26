@@ -621,6 +621,8 @@
     });
     window.addEventListener('resize', () => { buildKeyboard(); });
 
+    $('ver').textContent = window.pianoApi ? 'v' + window.pianoApi.version : '(desarrollo)';
+
     // Sonido / SoundFont
     $('volume').value = Math.round(Sound.volume * 100); $('volLabel').textContent = $('volume').value + '%';
     $('program').value = String(Sound.program);

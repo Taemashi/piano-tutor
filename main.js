@@ -85,6 +85,8 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('sf:clear', () => { writeCfg({ ...readCfg(), soundfont: null }); });
 
+  ipcMain.on('app:version', (e) => { e.returnValue = app.getVersion(); });
+
   createWindow();
   setupAutoUpdate();
 });
