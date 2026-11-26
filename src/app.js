@@ -10,7 +10,7 @@
     loopA: 1, loopB: 1, measures: 0,
     steps: [], idx: 0, status: 'idle', noteEls: new Map(), measureEl: [], rowH: 250,
     stats: { ok: 0, bad: 0, errs: 0, total: 0 },
-    thruOn: new Set(), keyEls: {}, kbLo: 36, kbHi: 96, held: new Set(), passes: 0,
+    stepByBeat: new Map(), thruOn: new Set(), keyEls: {}, kbLo: 36, kbHi: 96, held: new Set(), passes: 0,
     ctx: null, master: null, raf: 0, t0: 0, spb: 0.5, endTime: 0, timeOf: null, tol: 0.2, lastCur: null
   };
 
@@ -252,6 +252,7 @@
       kb.appendChild(el); S.keyEls[p] = el;
     }
     refreshKeys();
+    fallResize();
   }
 
   function refreshKeys() {
@@ -263,11 +264,122 @@
         if (el) el.classList.add(h === 'R' ? 'wantR' : 'wantL');
       }
     }
+    updateNow();
   }
   function currentStep() {
     if (S.status === 'wait') return S.steps[S.idx];
     if (S.status === 'rhythm' || S.status === 'listen') return S.steps.find((s) => s.state === 'idle') || null;
     return null;
+  }
+
+  // ───────────────────────── Panel "toca ahora" ─────────────────────────
+  let lastNow = '';
+  function updateNow() {
+    const el = $('now'); if (!el) return;
+    const legend = '<span id="legend"><i style="background:#2563eb"></i>mano derecha (melodía)<i style="background:#d97706"></i>mano izquierda (bajo)</span>';
+    let html;
+    if (!S.song) html = '<span class="lbl">Abre un archivo MIDI o prueba la canción de ejemplo para empezar.</span>';
+    else {
+      const cur = S.status === 'idle' ? null : currentStep();
+      if (!cur) {
+        html = S.status === 'idle'
+          ? '<span class="lbl">Pulsa <b>▶ Iniciar</b>. Verás barras de colores bajar hacia el teclado: toca esa tecla cuando la barra llegue abajo.</span>'
+          : '<span class="lbl">¡Fin de la canción!</span>';
+      } else {
+        const chips = [...cur.hands.entries()].sort((a, b) => a[0] - b[0])
+          .map(([p, h]) => '<span class="chip ' + h + '">' + NAMES_ES[p % 12] + '<small>' + (h === 'R' ? 'derecha' : 'izquierda') + '</small></span>').join('');
+        html = '<span class="lbl">' + (S.status === 'wait' ? 'Toca ahora:' : 'Siguiente:') + '</span>' + chips;
+      }
+    }
+    html += legend;
+    if (html !== lastNow) { el.innerHTML = html; lastNow = html; }
+  }
+
+  // ───────────────────────── Teclas que caen ─────────────────────────
+  const Fall = { cv: null, g: null, w: 0, h: 0, dpr: 1, view: 0 };
+  function fallResize() {
+    const cv = Fall.cv || (Fall.cv = $('fall')); if (!cv) return;
+    const wrap = $('fallWrap'), kb = $('kb');
+    const w = kb.clientWidth, h = wrap.clientHeight;
+    if (!w || !h) { Fall.w = 0; return; }
+    Fall.dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(w * Fall.dpr); cv.height = Math.round(h * Fall.dpr);
+    cv.style.width = w + 'px'; cv.style.height = h + 'px';
+    Fall.g = cv.getContext('2d'); Fall.w = w; Fall.h = h;
+  }
+  function fallTarget() {
+    const bm = S.song.beatsPerMeasure, startBeat = (S.loopA - 1) * bm;
+    if ((S.status === 'rhythm' || S.status === 'listen') && S.ctx) return startBeat + (S.ctx.currentTime - S.t0) / S.spb;
+    if (S.status === 'wait') {
+      const st = S.steps[S.idx] || S.steps[S.steps.length - 1];
+      return st ? st.beat : startBeat;
+    }
+    return startBeat - 0.4;
+  }
+  const STATE_FILL = { ok: '#22c55e', bad: '#eab308', miss: '#ef4444' };
+  function drawFall() {
+    requestAnimationFrame(drawFall);
+    const v = document.body.dataset.view;
+    if (v === 'score' || !Fall.w || !Fall.g) return;
+    const g = Fall.g, W = Fall.w, H = Fall.h;
+    g.setTransform(Fall.dpr, 0, 0, Fall.dpr, 0, 0);
+    g.fillStyle = '#0b0d12'; g.fillRect(0, 0, W, H);
+    if (!S.song) {
+      g.fillStyle = '#5b6478'; g.font = '16px Segoe UI, sans-serif'; g.textAlign = 'center';
+      g.fillText('Aquí caerán las notas de la canción', W / 2, H / 2);
+      return;
+    }
+    const bm = S.song.beatsPerMeasure, ppb = H / 6;
+    const tgt = fallTarget();
+    const timed = S.status === 'rhythm' || S.status === 'listen';
+    Fall.view = timed ? tgt : Fall.view + (tgt - Fall.view) * 0.2;
+    const vb = Fall.view, top = vb + H / ppb;
+
+    // líneas de pulso y de compás
+    g.textAlign = 'left'; g.font = '10px Segoe UI, sans-serif';
+    for (let b = Math.floor(vb); b <= Math.ceil(top); b++) {
+      if (b < 0) continue;
+      const y = H - (b - vb) * ppb, strong = b % bm === 0;
+      g.strokeStyle = strong ? 'rgba(255,255,255,.22)' : 'rgba(255,255,255,.07)';
+      g.lineWidth = 1; g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke();
+      if (strong) { g.fillStyle = 'rgba(255,255,255,.35)'; g.fillText('compás ' + (b / bm + 1), 4, y - 3); }
+    }
+    // separadores en cada Do
+    g.strokeStyle = 'rgba(255,255,255,.06)';
+    for (const [p, el] of Object.entries(S.keyEls)) {
+      if (p % 12 === 0) { g.beginPath(); g.moveTo(el.offsetLeft, 0); g.lineTo(el.offsetLeft, H); g.stroke(); }
+    }
+
+    const cur = S.status === 'idle' ? null : currentStep();
+    for (const n of S.notes) {
+      if (n.q + n.qd < vb - 1 || n.q > top + 0.1) continue;
+      const el = S.keyEls[n.pitch]; if (!el) continue;
+      const x = el.offsetLeft, w = el.offsetWidth;
+      const yb = H - (n.q - vb) * ppb, yt = H - (n.q + n.qd - vb) * ppb;
+      const h = Math.max(yb - yt - 3, 12), y = yb - 3 - h;
+      const active = handActive(n.hand);
+      const st = S.status !== 'idle' && active ? S.stepByBeat.get(n.q) : null;
+      let fill = n.hand === 'R' ? '#3b82f6' : '#f59e0b';
+      if (st && STATE_FILL[st.state]) fill = STATE_FILL[st.state];
+      g.globalAlpha = active ? 1 : 0.22; g.fillStyle = fill;
+      g.beginPath(); g.roundRect(x + 1, y, w - 2, h, 4); g.fill();
+      if (st && st === cur) { g.lineWidth = 2; g.strokeStyle = '#fff'; g.stroke(); }
+      if (w >= 15 && h >= 16 && active) {
+        g.fillStyle = '#fff'; g.font = 'bold ' + Math.min(12, w - 6) + 'px Segoe UI, sans-serif'; g.textAlign = 'center';
+        g.fillText(NAMES_ES[n.pitch % 12], x + w / 2, Math.min(y + h - 5, H - 8));
+      }
+      g.globalAlpha = 1;
+    }
+    // zona de "toca aquí"
+    const gr = g.createLinearGradient(0, H - 22, 0, H);
+    gr.addColorStop(0, 'rgba(59,130,246,0)'); gr.addColorStop(1, 'rgba(59,130,246,.45)');
+    g.fillStyle = gr; g.fillRect(0, H - 22, W, 22);
+  }
+
+  function setView(v) {
+    document.body.dataset.view = v; store.set('view', v);
+    document.querySelectorAll('#views button').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
+    requestAnimationFrame(() => { fallResize(); if (v !== 'fall') renderScore(); });
   }
 
   // ───────────────────────── Pasos de práctica ─────────────────────────
@@ -283,6 +395,7 @@
       s.pitches.add(n.pitch); s.hands.set(n.pitch, n.hand);
     }
     S.steps = [...m.values()].sort((a, b) => a.beat - b.beat);
+    S.stepByBeat = new Map(S.steps.map((st) => [st.beat, st]));
     for (const s of S.steps) {
       s.els = (S.noteEls.get(s.beat) || []).filter((e) => handActive(e.hand)).map((e) => e.el);
     }
@@ -492,6 +605,7 @@
       s.got.add(pitch);
       if (s.got.size === s.pitches.size) {
         const clean = !s.err;
+        s.state = clean ? 'ok' : 'bad';
         paint(s, clean ? 's-ok' : 's-bad');
         if (clean) S.stats.ok++; else S.stats.bad++;
         S.idx++;
@@ -632,6 +746,11 @@
 
   function init() {
     $('modeHelp').textContent = MODE_HELP.wait;
+    segment('views', setView);
+    const sv = store.get('view', 'fall');
+    setView(['fall', 'score', 'both'].includes(sv) ? sv : 'fall');
+    new ResizeObserver(fallResize).observe($('fallWrap'));
+    requestAnimationFrame(drawFall);
     segment('hands', (v) => { S.hands = v; if (S.status !== 'idle') stopAll(); applyDim(); });
     segment('modes', (v) => { S.mode = v; $('modeHelp').textContent = MODE_HELP[v]; if (S.status !== 'idle') stopAll(); });
     $('splitMode').addEventListener('change', (e) => {

@@ -19,6 +19,16 @@
     </section>
 
     <section>
+      <h2>Vista</h2>
+      <div class="seg" id="views">
+        <button data-v="fall" title="Las notas bajan hacia el teclado, sin necesidad de leer partitura">Teclas que caen</button>
+        <button data-v="score" title="Partitura clásica">Partitura</button>
+        <button data-v="both" title="Teclas que caen y partitura a la vez">Ambas</button>
+      </div>
+      <div class="small muted">«Teclas que caen» no requiere saber leer música: toca la tecla cuando la barra llegue abajo.</div>
+    </section>
+
+    <section>
       <h2>Mano a practicar</h2>
       <div class="seg" id="hands">
         <button data-v="both" class="on">Ambas</button>
@@ -106,10 +116,12 @@
       <span id="feedback">Abre un archivo MIDI o prueba la canción de ejemplo.</span>
       <span id="stats" class="muted"></span>
     </div>
+    <div id="now"></div>
     <div id="scoreWrap">
       <div id="score"></div>
       <div id="overlay" hidden></div>
     </div>
+    <div id="fallWrap"><canvas id="fall"></canvas></div>
     <div id="kbWrap">
       <div id="kb"></div>
       <div class="small muted" id="kbHint">Sin piano: usa el teclado del PC (Z S X D C V G B H N J M = Do3…Si3, Q 2 W 3 E R 5 T 6 Y 7 U = Do4…Si4) o haz clic en las teclas.</div>
