@@ -6,7 +6,7 @@
 
   const S = {
     song: null, notes: [], hands: 'both', mode: 'wait', speed: 1,
-    splitMode: 'pitch', splitPoint: 60,
+    splitMode: 'auto', splitPoint: 60, edit: false, sel: new Set(), hist: [], overrides: {}, songId: '', handInfo: null,
     loopA: 1, loopB: 1, measures: 0,
     steps: [], idx: 0, status: 'idle', noteEls: new Map(), measureEl: [], rowH: 250,
     stats: { ok: 0, bad: 0, errs: 0, total: 0 },
@@ -152,19 +152,27 @@
   }
 
   // ───────────────────────── Manos / canción ─────────────────────────
+  const noteKey = (n) => n.q + '|' + n.pitch;
+  function makeSongId() {
+    let h = 0;
+    for (const n of S.notes) h = (h * 31 + n.pitch * 7 + Math.round(n.q * 4)) | 0;
+    return (S.song.title || '') + '|' + S.notes.length + '|' + h;
+  }
+  function loadOverrides() {
+    try { S.overrides = JSON.parse(localStorage.getItem('pt.hands:' + S.songId) || '{}'); } catch (e) { S.overrides = {}; }
+  }
+  function saveOverrides() {
+    try { localStorage.setItem('pt.hands:' + S.songId, JSON.stringify(S.overrides)); } catch (e) {}
+  }
+  function applyOverrides() { for (const n of S.notes) n.hand = S.overrides[noteKey(n)] || n.auto; }
+  function showSplitInfo() {
+    const r = S.handInfo, el = $('splitInfo'); if (!r) { el.className = 'info'; el.textContent = ''; return; }
+    el.className = 'info ' + r.level;
+    el.innerHTML = '<b>' + escapeHtml(r.title) + '</b>' + escapeHtml(r.detail);
+  }
   function assignHands() {
-    const notes = S.notes;
-    let usePitch = S.splitMode === 'pitch';
-    if (!usePitch) {
-      const tr = [...S.song.tracks].sort((a, b) => b.avg - a.avg);
-      if (tr.length < 2) usePitch = true;
-      else {
-        const rightTrack = tr[0].index;
-        for (const n of notes) n.hand = n.track === rightTrack ? 'R' : 'L';
-        return;
-      }
-    }
-    for (const n of notes) n.hand = n.pitch >= S.splitPoint ? 'R' : 'L';
+    S.handInfo = Hands.detect(S.song, S.notes, S.song.beatsPerMeasure, S.measures, S.splitMode, S.splitPoint);
+    applyOverrides(); showSplitInfo(); updateEditInfo();
   }
 
   function loadSong(song, label) {
@@ -186,14 +194,12 @@
     S.loopA = 1; S.loopB = S.measures;
     $('loopA').max = $('loopB').max = S.measures;
     $('loopA').value = 1; $('loopB').value = S.measures;
-    $('splitMode').querySelector('[value=tracks]').disabled = song.tracks.length < 2;
-    S.splitMode = song.tracks.length >= 2 ? 'tracks' : 'pitch';
-    $('splitMode').value = S.splitMode;
-    $('splitRow').style.display = S.splitMode === 'pitch' ? '' : 'none';
-    // Punto de corte sugerido: media de alturas
-    const avg = S.notes.reduce((s, n) => s + n.pitch, 0) / S.notes.length;
-    S.splitPoint = Math.max(40, Math.min(80, Math.round(Math.min(60, avg))));
-    $('splitPoint').value = S.splitPoint; updateSplitLabel();
+    S.splitMode = 'auto';
+    $('splitMode').value = 'auto';
+    $('splitRow').style.display = 'none';
+    S.splitPoint = 60; $('splitPoint').value = 60; updateSplitLabel();
+    S.songId = makeSongId(); loadOverrides(); S.hist = []; S.sel.clear();
+    if (S.edit) setEdit(false);
     assignHands();
 
     const info = [];
@@ -213,12 +219,14 @@
     if (!S.song) return;
     const r = Notation.render($('score'), S.song, S.notes, S.measures, S.song.sf < 0);
     S.noteEls = r.noteEls; S.measureEl = r.measureEl; S.rowH = r.rowH;
+    S.elInfo = new Map();
+    for (const [beat, list] of r.noteEls) for (const e of list) S.elInfo.set(e.el, { beat, hand: e.hand });
     applyDim();
   }
 
   const handActive = (h) => S.hands === 'both' || S.hands === h;
   function applyDim() {
-    for (const list of S.noteEls.values()) for (const e of list) e.el.classList.toggle('dim', !handActive(e.hand));
+    for (const list of S.noteEls.values()) for (const e of list) e.el.classList.toggle('dim', !S.edit && !handActive(e.hand));
   }
 
   // ───────────────────────── Teclado en pantalla ─────────────────────────
@@ -278,7 +286,8 @@
     const el = $('now'); if (!el) return;
     const legend = '<span id="legend"><i style="background:#2563eb"></i>mano derecha (melodía)<i style="background:#d97706"></i>mano izquierda (bajo)</span>';
     let html;
-    if (!S.song) html = '<span class="lbl">Abre un archivo MIDI o prueba la canción de ejemplo para empezar.</span>';
+    if (S.edit) html = '<span class="lbl">✏️ <b>Modo edición</b>: haz clic en una nota para pasarla de mano. Azul = derecha (melodía), naranja = izquierda (bajo).</span>';
+    else if (!S.song) html = '<span class="lbl">Abre un archivo MIDI o prueba la canción de ejemplo para empezar.</span>';
     else {
       const cur = S.status === 'idle' ? null : currentStep();
       if (!cur) {
@@ -296,7 +305,7 @@
   }
 
   // ───────────────────────── Teclas que caen ─────────────────────────
-  const Fall = { cv: null, g: null, w: 0, h: 0, dpr: 1, view: 0 };
+  const Fall = { cv: null, g: null, w: 0, h: 0, dpr: 1, view: 0, manual: 0, ppb: 60, hit: [], drag: null };
   function fallResize() {
     const cv = Fall.cv || (Fall.cv = $('fall')); if (!cv) return;
     const wrap = $('fallWrap'), kb = $('kb');
@@ -309,6 +318,7 @@
   }
   function fallTarget() {
     const bm = S.song.beatsPerMeasure, startBeat = (S.loopA - 1) * bm;
+    if (S.edit) return Fall.manual;
     if ((S.status === 'rhythm' || S.status === 'listen') && S.ctx) return startBeat + (S.ctx.currentTime - S.t0) / S.spb;
     if (S.status === 'wait') {
       const st = S.steps[S.idx] || S.steps[S.steps.length - 1];
@@ -329,7 +339,8 @@
       g.fillText('Aquí caerán las notas de la canción', W / 2, H / 2);
       return;
     }
-    const bm = S.song.beatsPerMeasure, ppb = H / 6;
+    const bm = S.song.beatsPerMeasure, ppb = H / (S.edit ? 10 : 6);
+    Fall.ppb = ppb; Fall.hit = [];
     const tgt = fallTarget();
     const timed = S.status === 'rhythm' || S.status === 'listen';
     Fall.view = timed ? tgt : Fall.view + (tgt - Fall.view) * 0.2;
@@ -357,23 +368,129 @@
       const x = el.offsetLeft, w = el.offsetWidth;
       const yb = H - (n.q - vb) * ppb, yt = H - (n.q + n.qd - vb) * ppb;
       const h = Math.max(yb - yt - 3, 12), y = yb - 3 - h;
-      const active = handActive(n.hand);
+      const active = S.edit || handActive(n.hand);
+      Fall.hit.push({ n, x, y, w, h });
       const st = S.status !== 'idle' && active ? S.stepByBeat.get(n.q) : null;
       let fill = n.hand === 'R' ? '#3b82f6' : '#f59e0b';
       if (st && STATE_FILL[st.state]) fill = STATE_FILL[st.state];
       g.globalAlpha = active ? 1 : 0.22; g.fillStyle = fill;
       g.beginPath(); g.roundRect(x + 1, y, w - 2, h, 4); g.fill();
       if (st && st === cur) { g.lineWidth = 2; g.strokeStyle = '#fff'; g.stroke(); }
+      if (S.edit && S.sel.has(n)) { g.lineWidth = 2; g.setLineDash([4, 3]); g.strokeStyle = '#fff'; g.stroke(); g.setLineDash([]); }
       if (w >= 15 && h >= 16 && active) {
         g.fillStyle = '#fff'; g.font = 'bold ' + Math.min(12, w - 6) + 'px Segoe UI, sans-serif'; g.textAlign = 'center';
         g.fillText(NAMES_ES[n.pitch % 12], x + w / 2, Math.min(y + h - 5, H - 8));
       }
       g.globalAlpha = 1;
     }
+    if (Fall.drag && Fall.drag.moved) {
+      const d = Fall.drag; g.globalAlpha = 1; g.strokeStyle = '#fff'; g.fillStyle = 'rgba(255,255,255,.12)';
+      g.fillRect(Math.min(d.x0, d.x1), Math.min(d.y0, d.y1), Math.abs(d.x1 - d.x0), Math.abs(d.y1 - d.y0));
+      g.strokeRect(Math.min(d.x0, d.x1), Math.min(d.y0, d.y1), Math.abs(d.x1 - d.x0), Math.abs(d.y1 - d.y0));
+    }
     // zona de "toca aquí"
     const gr = g.createLinearGradient(0, H - 22, 0, H);
     gr.addColorStop(0, 'rgba(59,130,246,0)'); gr.addColorStop(1, 'rgba(59,130,246,.45)');
     g.fillStyle = gr; g.fillRect(0, H - 22, W, 22);
+  }
+
+  // ───────────────────────── Corregir manos ─────────────────────────
+  let rerenderT = 0;
+  function afterEdit() {
+    updateEditInfo();
+    clearTimeout(rerenderT);
+    rerenderT = setTimeout(() => { renderScore(); }, 120);
+  }
+  function updateEditInfo() {
+    const n = Object.keys(S.overrides).length;
+    $('editInfo').textContent = (n ? n + ' nota(s) corregida(s) a mano. ' : 'Sin correcciones. ') + (S.sel.size ? S.sel.size + ' seleccionada(s).' : '');
+  }
+  function setNoteHand(notes, hand) {
+    const changes = [];
+    for (const n of notes) {
+      if (n.hand === hand) continue;
+      changes.push({ n, old: n.hand });
+      n.hand = hand;
+      if (hand === n.auto) delete S.overrides[noteKey(n)]; else S.overrides[noteKey(n)] = hand;
+    }
+    if (!changes.length) return;
+    S.hist.push(changes); if (S.hist.length > 200) S.hist.shift();
+    saveOverrides(); afterEdit();
+  }
+  function undoHands() {
+    const ch = S.hist.pop(); if (!ch) return;
+    for (const { n, old } of ch) {
+      n.hand = old;
+      if (old === n.auto) delete S.overrides[noteKey(n)]; else S.overrides[noteKey(n)] = old;
+    }
+    saveOverrides(); afterEdit();
+  }
+  function resetHands() {
+    S.overrides = {}; S.hist = []; S.sel.clear(); applyOverrides(); saveOverrides(); afterEdit();
+  }
+  function setEdit(on) {
+    if (on && !S.song) return;
+    if (on) {
+      stopAll(true);
+      if (document.body.dataset.view === 'score') setView('both');
+      Fall.manual = (S.loopA - 1) * S.song.beatsPerMeasure - 0.4;
+    } else S.sel.clear();
+    S.edit = on;
+    document.body.classList.toggle('editing', on);
+    $('editTools').hidden = !on;
+    $('editToggle').textContent = on ? '✔ Terminar edición' : '✏️ Editar manos';
+    applyDim(); updateEditInfo();
+    if (on) setFeedback('Modo edición: haz clic en una nota para cambiarla de mano.');
+  }
+  const other = (h) => (h === 'R' ? 'L' : 'R');
+
+  function initEditor() {
+    $('editToggle').addEventListener('click', () => setEdit(!S.edit));
+    $('toR').addEventListener('click', () => { setNoteHand([...S.sel], 'R'); });
+    $('toL').addEventListener('click', () => { setNoteHand([...S.sel], 'L'); });
+    $('undoH').addEventListener('click', undoHands);
+    $('resetH').addEventListener('click', resetHands);
+    $('gotoM').addEventListener('change', (e) => {
+      if (!S.song) return;
+      const m = Math.max(1, Math.min(S.measures, +e.target.value || 1));
+      Fall.manual = (m - 1) * S.song.beatsPerMeasure - 0.4;
+    });
+    // Partitura: clic en una figura
+    $('score').addEventListener('click', (e) => {
+      if (!S.edit || !S.elInfo) return;
+      const g = e.target.closest('.vf-stavenote'); if (!g) return;
+      const info = S.elInfo.get(g); if (!info) return;
+      const notes = S.notes.filter((n) => n.q === info.beat && n.hand === info.hand);
+      setNoteHand(notes, other(info.hand));
+    });
+    // Barras que caen: clic, recuadro y rueda
+    const cv = $('fall');
+    let drag = null;
+    const pos = (e) => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    cv.addEventListener('mousedown', (e) => { if (!S.edit) return; const [x, y] = pos(e); drag = { x0: x, y0: y, x1: x, y1: y, moved: false }; Fall.drag = drag; });
+    window.addEventListener('mousemove', (e) => {
+      if (!drag) return; const [x, y] = pos(e); drag.x1 = x; drag.y1 = y;
+      if (Math.hypot(x - drag.x0, y - drag.y0) > 5) drag.moved = true;
+    });
+    window.addEventListener('mouseup', () => {
+      if (!drag) return;
+      const d = drag; drag = null; Fall.drag = null;
+      if (d.moved) {
+        const x0 = Math.min(d.x0, d.x1), x1 = Math.max(d.x0, d.x1), y0 = Math.min(d.y0, d.y1), y1 = Math.max(d.y0, d.y1);
+        S.sel.clear();
+        for (const h of Fall.hit) if (h.x < x1 && h.x + h.w > x0 && h.y < y1 && h.y + h.h > y0) S.sel.add(h.n);
+        updateEditInfo();
+      } else {
+        const hit = [...Fall.hit].reverse().find((h) => d.x0 >= h.x && d.x0 <= h.x + h.w && d.y0 >= h.y && d.y0 <= h.y + h.h);
+        if (hit) { setNoteHand([hit.n], other(hit.n.hand)); } else { S.sel.clear(); updateEditInfo(); }
+      }
+    });
+    cv.addEventListener('wheel', (e) => {
+      if (!S.edit) return; e.preventDefault();
+      const bm = S.song ? S.song.beatsPerMeasure : 4;
+      Fall.manual = Math.max(-0.4, Math.min(S.measures * bm, Fall.manual + (e.deltaY / (Fall.ppb || 60)) * 0.8));
+      $('gotoM').value = Math.max(1, Math.min(S.measures, Math.floor(Fall.manual / bm) + 1));
+    }, { passive: false });
   }
 
   function setView(v) {
@@ -428,6 +545,7 @@
   // ───────────────────────── Inicio / parada ─────────────────────────
   function start() {
     if (!S.song) return;
+    if (S.edit) setEdit(false);
     stopAll();
     audio();
     S.passes = 0;
@@ -747,6 +865,7 @@
   function init() {
     $('modeHelp').textContent = MODE_HELP.wait;
     segment('views', setView);
+    initEditor();
     const sv = store.get('view', 'fall');
     setView(['fall', 'score', 'both'].includes(sv) ? sv : 'fall');
     new ResizeObserver(fallResize).observe($('fallWrap'));
@@ -853,5 +972,5 @@
     initMidi();
   }
   init();
-  window.__S = S; // útil para depurar
+  window.__S = S; window.__load = loadSong; // útil para depurar
 })();

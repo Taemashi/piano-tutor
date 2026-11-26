@@ -86,3 +86,9 @@ main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 body[data-view=fall] #fallWrap { display: block; flex: 1; min-height: 240px; }
 body[data-view=both] #fallWrap { display: block; height: 230px; flex: none; }
 body[data-view=fall] #scoreWrap { display: none; }
+
+.info { margin: 6px 0; font-size: 12px; padding: 6px 8px; border-radius: 6px; background: #262c3a; border-left: 3px solid var(--muted); }
+.info.ok { border-left-color: #22c55e; } .info.info { border-left-color: #3b82f6; } .info.warn { border-left-color: #f59e0b; }
+.info b { display: block; }
+body.editing #fall { cursor: crosshair; }
+body.editing .vf-stavenote { cursor: pointer; }

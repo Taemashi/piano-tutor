@@ -37,14 +37,27 @@
       </div>
       <label class="row">Dividir por
         <select id="splitMode">
-          <option value="pitch">Altura de la nota</option>
-          <option value="tracks">Pistas del archivo</option>
+          <option value="auto">Automático (recomendado)</option>
+          <option value="pitch">Altura fija (corte manual)</option>
         </select>
       </label>
+      <div id="splitInfo" class="info"></div>
       <label class="row" id="splitRow">Corte: <b id="splitLabel">Do4 (60)</b>
         <input id="splitPoint" type="range" min="36" max="84" value="60">
       </label>
-      <div class="small muted">Notas desde el corte hacia arriba = derecha. Hacia abajo = izquierda.</div>
+      <div class="small muted" id="splitHelp">El programa detecta solo cuál es la melodía y cuál el bajo. Si se equivoca, corrígelo abajo.</div>
+    </section>
+
+    <section>
+      <h2>Corregir manos</h2>
+      <button id="editToggle" class="btn">✏️ Editar manos</button>
+      <div id="editTools" hidden>
+        <div class="small muted">Clic en una nota (barra o partitura) = pasarla a la otra mano. Arrastra un recuadro sobre las barras para elegir varias y usa los botones. Rueda del ratón: avanzar o retroceder.</div>
+        <div class="two"><button id="toR" class="btn">→ Derecha</button><button id="toL" class="btn">→ Izquierda</button></div>
+        <div class="two"><button id="undoH" class="btn">Deshacer</button><button id="resetH" class="btn">Restablecer</button></div>
+        <label class="row">Ir al compás <input id="gotoM" type="number" min="1" value="1" style="width:70px"></label>
+        <div class="small muted" id="editInfo"></div>
+      </div>
     </section>
 
     <section>
@@ -131,6 +144,7 @@
   <script src="vendor/vexflow.js"></script>
   <script src="vendor/spessa.js"></script>
   <script src="midi.js"></script>
+  <script src="hands.js"></script>
   <script src="notation.js"></script>
   <script src="app.js"></script>
 </body>

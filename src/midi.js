@@ -30,7 +30,7 @@
       const end = Math.min(p + len, d.byteLength);
       if (id !== 'MTrk') { p = end; continue; }
 
-      let tick = 0, running = 0, name = '';
+      let tick = 0, running = 0, name = '', iname = '';
       const open = new Map();
       const tnotes = [];
       const vlq = () => {
@@ -53,6 +53,9 @@
             if (!timeSig) timeSig = { num: d.getUint8(p), den: 1 << d.getUint8(p + 1) };
           } else if (type === 0x59 && l >= 2) {
             if (!keySig) keySig = { sf: d.getInt8(p), minor: d.getUint8(p + 1) };
+          } else if (type === 0x04) {
+            iname = '';
+            for (let i = 0; i < l; i++) iname += String.fromCharCode(d.getUint8(p + i));
           } else if (type === 0x03) {
             name = '';
             for (let i = 0; i < l; i++) name += String.fromCharCode(d.getUint8(p + i));
@@ -81,7 +84,7 @@
       p = end;
       if (tnotes.length) {
         const avg = tnotes.reduce((s, n) => s + n.pitch, 0) / tnotes.length;
-        tracks.push({ index: t, name: name || ('Pista ' + (t + 1)), count: tnotes.length, avg });
+        tracks.push({ index: t, name: name || iname || ('Pista ' + (t + 1)), count: tnotes.length, avg });
         for (const n of tnotes) {
           notes.push({
             pitch: n.pitch,
