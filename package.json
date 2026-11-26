@@ -1,7 +1,7 @@
 {
   "name": "piano-tutor",
   "productName": "Piano Tutor",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Aprende a tocar canciones de piano nota por nota con tu piano MIDI",
   "main": "main.js",
   "author": "Taemashi",
